@@ -22,9 +22,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
@@ -90,6 +92,12 @@ func (r *OpensearchRoleReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurr
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&opensearchv1.OpensearchRole{}).
 		Owns(&opensearchv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
+		// Reconcile the resources of a cluster when its allowed namespaces change
+		Watches(
+			&opensearchv1.OpenSearchCluster{},
+			handler.EnqueueRequestsFromMapFunc(requestsForClusterReferences(mgr.GetClient(), &opensearchv1.OpensearchRoleList{})),
+			builder.WithPredicates(allowedNamespacesChanged),
+		).
 		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
 		Complete(r)
 }

@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -189,9 +190,29 @@ var _ = Describe("Cluster references", func() {
 				Expect(opensearchv1.AddToScheme(scheme)).To(Succeed())
 				Expect(opsterv1.AddToScheme(scheme)).To(Succeed())
 
+				allowed := func(namespaces string) map[string]string {
+					return map[string]string{util.AllowedNamespacesAnnotation: namespaces}
+				}
 				clusters := []client.Object{
 					&opensearchv1.OpenSearchCluster{ObjectMeta: metav1.ObjectMeta{Name: "local-cluster", Namespace: resourceNamespace}},
-					&opensearchv1.OpenSearchCluster{ObjectMeta: metav1.ObjectMeta{Name: "remote-cluster", Namespace: clusterNamespace}},
+					&opensearchv1.OpenSearchCluster{ObjectMeta: metav1.ObjectMeta{
+						Name: "remote-cluster", Namespace: clusterNamespace, Annotations: allowed("team-a," + resourceNamespace),
+					}},
+					&opensearchv1.OpenSearchCluster{ObjectMeta: metav1.ObjectMeta{
+						Name: "open-cluster", Namespace: clusterNamespace, Annotations: allowed("*"),
+					}},
+					&opensearchv1.OpenSearchCluster{ObjectMeta: metav1.ObjectMeta{
+						Name: "closed-cluster", Namespace: clusterNamespace,
+					}},
+					&opensearchv1.OpenSearchCluster{ObjectMeta: metav1.ObjectMeta{
+						Name: "other-teams-cluster", Namespace: clusterNamespace, Annotations: allowed("team-a,team-b"),
+					}},
+					&opsterv1.OpenSearchCluster{ObjectMeta: metav1.ObjectMeta{
+						Name: "legacy-cluster", Namespace: clusterNamespace, Annotations: allowed(resourceNamespace),
+					}},
+					&opsterv1.OpenSearchCluster{ObjectMeta: metav1.ObjectMeta{
+						Name: "closed-legacy-cluster", Namespace: clusterNamespace,
+					}},
 				}
 
 				// Simulate the cache error that a namespace-scoped operator returns for other namespaces.
@@ -214,10 +235,25 @@ var _ = Describe("Cluster references", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("should allow a cluster in another namespace", func() {
-					_, err := validator.ValidateCreate(ctx, tc.object(ref("remote-cluster", clusterNamespace)))
-					Expect(err).NotTo(HaveOccurred())
-				})
+				DescribeTable("allowed namespaces of a cluster in another namespace",
+					func(clusterName string, allowed bool) {
+						_, err := validator.ValidateCreate(ctx, tc.object(ref(clusterName, clusterNamespace)))
+						if allowed {
+							Expect(err).NotTo(HaveOccurred())
+						} else {
+							Expect(err).To(HaveOccurred())
+							Expect(err.Error()).To(Equal(fmt.Sprintf(
+								"namespace '%s' is not allowed to reference OpenSearch cluster '%s' in namespace '%s', add it to the %s annotation of the cluster",
+								resourceNamespace, clusterName, clusterNamespace, util.AllowedNamespacesAnnotation)))
+						}
+					},
+					Entry("should allow a namespace in the list", "remote-cluster", true),
+					Entry("should allow any namespace with a wildcard", "open-cluster", true),
+					Entry("should reject without the annotation", "closed-cluster", false),
+					Entry("should reject a namespace not in the list", "other-teams-cluster", false),
+					Entry("should allow a namespace in the list of a legacy cluster", "legacy-cluster", true),
+					Entry("should reject without the annotation on a legacy cluster", "closed-legacy-cluster", false),
+				)
 
 				It("should not look for the cluster in the resource namespace when a namespace is set", func() {
 					_, err := validator.ValidateCreate(ctx, tc.object(ref("local-cluster", clusterNamespace)))

@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -144,6 +145,12 @@ func (r *OpensearchUserReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurr
 		For(&opensearchv1.OpensearchUser{}).
 		// Get notified when opensearch clusters change
 		Owns(&opensearchv1.OpenSearchCluster{}).
+		// Reconcile the resources of a cluster when its allowed namespaces change
+		Watches(
+			&opensearchv1.OpenSearchCluster{},
+			handler.EnqueueRequestsFromMapFunc(requestsForClusterReferences(mgr.GetClient(), &opensearchv1.OpensearchUserList{})),
+			builder.WithPredicates(allowedNamespacesChanged),
+		).
 		// Get notified when password backing secret changes
 		Watches(
 			&corev1.Secret{},

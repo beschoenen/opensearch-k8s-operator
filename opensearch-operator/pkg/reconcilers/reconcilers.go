@@ -18,6 +18,7 @@ const (
 	opensearchError               = "OpensearchError"
 	opensearchAPIError            = "OpensearchAPIError"
 	opensearchRefMismatch         = "OpensearchRefMismatch"
+	opensearchRefNotAllowed       = "OpensearchRefNotAllowed"
 	opensearchAPIUpdated          = "OpensearchAPIUpdated"
 	opensearchAPIUnchanged        = "OpensearchAPIUnchanged"
 	opensearchCustomResourceError = "OpensearchCustomResourceError"

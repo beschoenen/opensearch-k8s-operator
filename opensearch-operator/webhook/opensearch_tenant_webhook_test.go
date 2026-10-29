@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -136,7 +137,10 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 			Expect(warnings).To(BeEmpty())
 		})
 
-		It("should allow tenant to reference cluster in other namespace", func() {
+		It("should allow tenant to reference cluster in other namespace when the cluster allows its namespace", func() {
+			cluster.Annotations = map[string]string{util.AllowedNamespacesAnnotation: "test-namespace"}
+			Expect(fakeClient.Update(ctx, cluster)).To(Succeed())
+
 			tenant := &opensearchv1.OpensearchTenant{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-tenant",

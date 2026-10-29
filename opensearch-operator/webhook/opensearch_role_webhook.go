@@ -21,10 +21,8 @@ import (
 	"fmt"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -88,29 +86,9 @@ func (v *OpenSearchRoleValidator) ValidateDelete(ctx context.Context, obj runtim
 	return nil, nil
 }
 
-// validateClusterReference validates that the referenced OpenSearch cluster exists
+// validateClusterReference validates that the referenced OpenSearch cluster exists and allows the namespace of the resource
 func (v *OpenSearchRoleValidator) validateClusterReference(ctx context.Context, role *opensearchv1.OpensearchRole) error {
-	namespace := util.DetermineClusterNamespace(role.Spec.OpensearchRef, role.Namespace)
-
-	// Try new API group first
-	cluster := &opensearchv1.OpenSearchCluster{}
-	err := v.Client.Get(ctx, types.NamespacedName{
-		Name:      role.Spec.OpensearchRef.Name,
-		Namespace: namespace,
-	}, cluster)
-
-	if err != nil {
-		// Fall back to old API group for backward compatibility
-		oldCluster := &opsterv1.OpenSearchCluster{}
-		if legacyErr := v.Client.Get(ctx, types.NamespacedName{
-			Name:      role.Spec.OpensearchRef.Name,
-			Namespace: namespace,
-		}, oldCluster); legacyErr != nil {
-			return clusterReferenceError(role.Spec.OpensearchRef.Name, namespace, err, legacyErr)
-		}
-	}
-
-	return nil
+	return validateClusterReference(ctx, v.Client, role.Spec.OpensearchRef, role.Namespace)
 }
 
 // validateClusterReferenceUnchanged validates that the cluster reference hasn't changed

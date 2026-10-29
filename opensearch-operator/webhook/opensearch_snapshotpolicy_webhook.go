@@ -21,10 +21,8 @@ import (
 	"fmt"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -100,26 +98,7 @@ func (v *OpenSearchSnapshotPolicyValidator) ValidateDelete(ctx context.Context, 
 }
 
 func (v *OpenSearchSnapshotPolicyValidator) validateClusterReference(ctx context.Context, policy *opensearchv1.OpensearchSnapshotPolicy) error {
-	namespace := util.DetermineClusterNamespace(policy.Spec.OpensearchRef, policy.Namespace)
-
-	// Try new API group first
-	cluster := &opensearchv1.OpenSearchCluster{}
-	err := v.Client.Get(ctx, types.NamespacedName{
-		Name:      policy.Spec.OpensearchRef.Name,
-		Namespace: namespace,
-	}, cluster)
-
-	if err != nil {
-		// Fall back to old API group for backward compatibility
-		oldCluster := &opsterv1.OpenSearchCluster{}
-		if legacyErr := v.Client.Get(ctx, types.NamespacedName{
-			Name:      policy.Spec.OpensearchRef.Name,
-			Namespace: namespace,
-		}, oldCluster); legacyErr != nil {
-			return clusterReferenceError(policy.Spec.OpensearchRef.Name, namespace, err, legacyErr)
-		}
-	}
-	return nil
+	return validateClusterReference(ctx, v.Client, policy.Spec.OpensearchRef, policy.Namespace)
 }
 
 func (v *OpenSearchSnapshotPolicyValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpensearchSnapshotPolicy) error {

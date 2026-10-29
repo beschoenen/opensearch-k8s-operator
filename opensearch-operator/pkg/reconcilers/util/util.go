@@ -379,6 +379,37 @@ func OpensearchClusterRefUnchanged(old, new opensearchv1.OpensearchClusterRef, r
 		DetermineClusterNamespace(old, resourceNamespace) == DetermineClusterNamespace(new, resourceNamespace)
 }
 
+// AllowedNamespacesAnnotation is set on an OpenSearchCluster to allow resources in other
+// namespaces to reference it. The value is a comma-separated list of namespaces, or "*"
+// for all namespaces.
+const AllowedNamespacesAnnotation = "opensearch.org/allowed-namespaces"
+
+// ClusterAllowsNamespace reports whether resources in namespace may reference the cluster.
+// Resources in the cluster's own namespace are always allowed. Resources in other namespaces
+// are allowed only when the AllowedNamespacesAnnotation of the cluster lists them or is "*".
+func ClusterAllowsNamespace(cluster metav1.Object, namespace string) bool {
+	if cluster.GetNamespace() == namespace {
+		return true
+	}
+	allowedNamespaces, ok := cluster.GetAnnotations()[AllowedNamespacesAnnotation]
+	if !ok {
+		return false
+	}
+	for _, allowed := range strings.Split(allowedNamespaces, ",") {
+		allowed = strings.TrimSpace(allowed)
+		if allowed == "*" || allowed == namespace {
+			return true
+		}
+	}
+	return false
+}
+
+// NamespaceNotAllowedMessage describes why a resource in namespace may not reference the cluster.
+func NamespaceNotAllowedMessage(cluster metav1.Object, namespace string) string {
+	return fmt.Sprintf("namespace '%s' is not allowed to reference OpenSearch cluster '%s' in namespace '%s', add it to the %s annotation of the cluster",
+		namespace, cluster.GetName(), cluster.GetNamespace(), AllowedNamespacesAnnotation)
+}
+
 // Generates a checksum of binary data using the SHA1 algorithm.
 func GetSha1Sum(data []byte) (string, error) {
 	hasher := sha1.New()

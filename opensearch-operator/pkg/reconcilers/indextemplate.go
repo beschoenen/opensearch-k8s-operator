@@ -111,6 +111,14 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 		return
 	}
 
+	// Check the namespace of the resource is allowed to reference the cluster
+	if !util.ClusterAllowsNamespace(r.cluster, r.instance.Namespace) {
+		reason = util.NamespaceNotAllowedMessage(r.cluster, r.instance.Namespace)
+		err = fmt.Errorf("%s", reason)
+		r.recorder.Event(r.instance, "Warning", opensearchRefNotAllowed, reason)
+		return
+	}
+
 	// Check cluster ref has not changed
 	if r.instance.Status.ManagedCluster != nil {
 		if *r.instance.Status.ManagedCluster != r.cluster.UID {
@@ -255,6 +263,12 @@ func (r *IndexTemplateReconciler) Delete() error {
 
 	if r.cluster == nil || !r.cluster.DeletionTimestamp.IsZero() {
 		// If the opensearch cluster doesn't exist, we don't need to delete anything
+		return nil
+	}
+
+	if !util.ClusterAllowsNamespace(r.cluster, r.instance.Namespace) {
+		// The namespace is no longer allowed to reference the cluster, so leave the cluster untouched
+		r.logger.Info(util.NamespaceNotAllowedMessage(r.cluster, r.instance.Namespace))
 		return nil
 	}
 

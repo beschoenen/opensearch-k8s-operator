@@ -21,11 +21,9 @@ import (
 	"fmt"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	util "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -84,29 +82,9 @@ func (v *OpenSearchComponentTemplateValidator) ValidateDelete(ctx context.Contex
 	return nil, nil
 }
 
-// validateClusterReference validates that the referenced OpenSearch cluster exists
+// validateClusterReference validates that the referenced OpenSearch cluster exists and allows the namespace of the resource
 func (v *OpenSearchComponentTemplateValidator) validateClusterReference(ctx context.Context, componentTemplate *opensearchv1.OpensearchComponentTemplate) error {
-	namespace := util.DetermineClusterNamespace(componentTemplate.Spec.OpensearchRef, componentTemplate.Namespace)
-
-	// Try new API group first
-	cluster := &opensearchv1.OpenSearchCluster{}
-	err := v.Client.Get(ctx, types.NamespacedName{
-		Name:      componentTemplate.Spec.OpensearchRef.Name,
-		Namespace: namespace,
-	}, cluster)
-
-	if err != nil {
-		// Fall back to old API group for backward compatibility
-		oldCluster := &opsterv1.OpenSearchCluster{}
-		if legacyErr := v.Client.Get(ctx, types.NamespacedName{
-			Name:      componentTemplate.Spec.OpensearchRef.Name,
-			Namespace: namespace,
-		}, oldCluster); legacyErr != nil {
-			return clusterReferenceError(componentTemplate.Spec.OpensearchRef.Name, namespace, err, legacyErr)
-		}
-	}
-
-	return nil
+	return validateClusterReference(ctx, v.Client, componentTemplate.Spec.OpensearchRef, componentTemplate.Namespace)
 }
 
 // validateClusterReferenceUnchanged validates that the cluster reference hasn't changed

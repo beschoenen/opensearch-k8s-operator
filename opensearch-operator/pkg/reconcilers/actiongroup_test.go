@@ -15,6 +15,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -156,6 +157,58 @@ var _ = Describe("actiongroup reconciler", func() {
 		It("should look up the cluster in the referenced namespace on delete", func() {
 			instance.Status.ExistingActionGroup = ptr.To(false)
 			Expect(reconciler.Delete()).To(Succeed())
+		})
+	})
+
+	When("cluster in another namespace does not allow the namespace", func() {
+		BeforeEach(func() {
+			cluster.Namespace = "cluster-namespace"
+			instance.Spec.OpensearchRef.Namespace = "cluster-namespace"
+			mockClient.EXPECT().GetOpenSearchCluster(instance.Spec.OpensearchRef.Name, "cluster-namespace").Return(*cluster, nil)
+			recorder = record.NewFakeRecorder(1)
+		})
+		It("should not reconcile", func() {
+			go func() {
+				defer GinkgoRecover()
+				defer close(recorder.Events)
+				_, err := reconciler.Reconcile()
+				Expect(err).To(HaveOccurred())
+			}()
+			var events []string
+			for msg := range recorder.Events {
+				events = append(events, msg)
+			}
+			Expect(events).To(HaveLen(1))
+			Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s %s", opensearchRefNotAllowed, util.NamespaceNotAllowedMessage(cluster, instance.Namespace))))
+		})
+		It("should not change the cluster on delete", func() {
+			instance.Status.ExistingActionGroup = ptr.To(false)
+			Expect(reconciler.Delete()).To(Succeed())
+		})
+	})
+
+	When("cluster in another namespace allows the namespace", func() {
+		BeforeEach(func() {
+			cluster.Namespace = "cluster-namespace"
+			cluster.Annotations = map[string]string{util.AllowedNamespacesAnnotation: instance.Namespace}
+			instance.Spec.OpensearchRef.Namespace = "cluster-namespace"
+			mockClient.EXPECT().GetOpenSearchCluster(instance.Spec.OpensearchRef.Name, "cluster-namespace").Return(*cluster, nil)
+			recorder = record.NewFakeRecorder(1)
+		})
+		It("should continue to reconcile", func() {
+			go func() {
+				defer GinkgoRecover()
+				defer close(recorder.Events)
+				result, err := reconciler.Reconcile()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.Requeue).To(BeTrue())
+			}()
+			var events []string
+			for msg := range recorder.Events {
+				events = append(events, msg)
+			}
+			Expect(events).To(HaveLen(1))
+			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster status to be running", opensearchPending)))
 		})
 	})
 

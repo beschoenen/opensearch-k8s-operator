@@ -898,3 +898,35 @@ var _ = Describe("Cluster references", func() {
 			opensearchv1.OpensearchClusterRef{Name: "cluster", Namespace: "cluster-ns"}, false),
 	)
 })
+
+var _ = Describe("ClusterAllowsNamespace", func() {
+	cluster := func(annotations map[string]string) *opensearchv1.OpenSearchCluster {
+		return &opensearchv1.OpenSearchCluster{ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster", Namespace: "cluster-ns", Annotations: annotations,
+		}}
+	}
+	allowed := func(namespaces string) map[string]string {
+		return map[string]string{AllowedNamespacesAnnotation: namespaces}
+	}
+
+	DescribeTable("checks the namespace of the resource",
+		func(annotations map[string]string, namespace string, expected bool) {
+			Expect(ClusterAllowsNamespace(cluster(annotations), namespace)).To(Equal(expected))
+		},
+		Entry("allows the cluster namespace without annotation", nil, "cluster-ns", true),
+		Entry("allows the cluster namespace when not listed", allowed("team-a"), "cluster-ns", true),
+		Entry("rejects another namespace without annotation", nil, "team-a", false),
+		Entry("rejects another namespace with an empty annotation", allowed(""), "team-a", false),
+		Entry("allows a listed namespace", allowed("team-a,team-b"), "team-b", true),
+		Entry("rejects a namespace that is not listed", allowed("team-a,team-b"), "team-c", false),
+		Entry("rejects a partial namespace match", allowed("team-a"), "team", false),
+		Entry("ignores spaces around namespaces", allowed(" team-a , team-b "), "team-b", true),
+		Entry("allows any namespace with a wildcard", allowed("*"), "team-a", true),
+		Entry("allows any namespace with a wildcard in the list", allowed("team-a,*"), "team-c", true),
+	)
+
+	It("describes how to allow the namespace", func() {
+		Expect(NamespaceNotAllowedMessage(cluster(nil), "team-a")).To(Equal(
+			"namespace 'team-a' is not allowed to reference OpenSearch cluster 'cluster' in namespace 'cluster-ns', add it to the opensearch.org/allowed-namespaces annotation of the cluster"))
+	})
+})

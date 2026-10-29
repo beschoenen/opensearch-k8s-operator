@@ -67,6 +67,11 @@ type OpensearchComponentTemplateList struct {
 	Items           []OpensearchComponentTemplate `json:"items"`
 }
 
+// GetOpensearchRef returns the OpenSearch cluster reference
+func (ct *OpensearchComponentTemplate) GetOpensearchRef() OpensearchClusterRef {
+	return ct.Spec.OpensearchRef
+}
+
 func init() {
 	SchemeBuilder.Register(&OpensearchComponentTemplate{}, &OpensearchComponentTemplateList{})
 }

@@ -17,11 +17,42 @@ limitations under the License.
 package webhook
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// validateClusterReference validates that the referenced OpenSearch cluster exists and that it
+// allows resources in resourceNamespace to reference it.
+func validateClusterReference(ctx context.Context, c client.Client, ref opensearchv1.OpensearchClusterRef, resourceNamespace string) error {
+	key := types.NamespacedName{
+		Name:      ref.Name,
+		Namespace: util.DetermineClusterNamespace(ref, resourceNamespace),
+	}
+
+	// Try new API group first
+	var cluster client.Object = &opensearchv1.OpenSearchCluster{}
+	if err := c.Get(ctx, key, cluster); err != nil {
+		// Fall back to old API group for backward compatibility
+		cluster = &opsterv1.OpenSearchCluster{}
+		if legacyErr := c.Get(ctx, key, cluster); legacyErr != nil {
+			return clusterReferenceError(key.Name, key.Namespace, err, legacyErr)
+		}
+	}
+
+	if !util.ClusterAllowsNamespace(cluster, resourceNamespace) {
+		return errors.New(util.NamespaceNotAllowedMessage(cluster, resourceNamespace))
+	}
+
+	return nil
+}
 
 // clusterReferenceError builds the error for a cluster reference that could not be resolved.
 // errs holds the lookup errors for each API group. The cluster is reported as missing only

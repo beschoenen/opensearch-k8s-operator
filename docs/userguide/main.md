@@ -2387,12 +2387,31 @@ You can customize the generated Prometheus `ServiceMonitor` endpoint with relabe
 
 ## Referencing OpensearchCluster in another namespace
 
-The operator allows referencing a cluster in a different namespace on all resources.
+A resource can reference an `OpenSearchCluster` in a different namespace. This applies to all resources that have the `spec.opensearchCluster` field.
 
 **Note:** This only works when the operator is deployed with cluster-scoped or multi-namespace watch mode and has RBAC permissions covering the referenced namespace. If the operator runs in single-namespace watch mode, validation and reconciliation will fail because the operator cannot read `OpenSearchCluster` objects in other namespaces.
 
-Define the `spec.opensearchCluster.namespace` property on any resource referencing an Opensearch cluster.
-When not defined, the default value will be the namespace of the resource.
+### Allowing namespaces on the cluster
+
+By default, a cluster accepts only resources from its own namespace. To accept resources from other namespaces, add the `opensearch.org/allowed-namespaces` annotation to the `OpenSearchCluster`. The value is a comma-separated list of namespaces. Use `*` to accept resources from all namespaces.
+
+Resources that reference a cluster can create users, roles and role bindings in that cluster. Allow only namespaces that you trust with this access.
+
+```yaml
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-first-cluster
+  namespace: another-namespace
+  annotations:
+    opensearch.org/allowed-namespaces: "default,team-a"
+spec:
+  # ...
+```
+
+### Referencing the cluster
+
+Set the `spec.opensearchCluster.namespace` field on the resource. When you do not set this field, the operator uses the namespace of the resource.
 
 ```yaml
 apiVersion: opensearch.org/v1
@@ -2405,6 +2424,18 @@ spec:
     name: my-first-cluster
     namespace: another-namespace
 ```
+
+You cannot change `spec.opensearchCluster` after you create the resource.
+
+### Resources from namespaces that are not allowed
+
+The admission webhook rejects a new resource when the cluster does not allow its namespace.
+
+When you change the annotation, the operator immediately reconciles all resources that reference the cluster. You do not have to restart the cluster or change the resources.
+
+When you remove a namespace from the annotation, the operator stops to reconcile the resources from that namespace. The resources get the error state and a `OpensearchRefNotAllowed` event. The operator does not change or delete the related objects in OpenSearch, also when you delete the resources. To remove these objects from OpenSearch, delete the resources while the namespace is still allowed.
+
+When you add the namespace to the annotation again, the operator continues to reconcile the resources.
 
 ## Managing ISM policies with Kubernetes resources
 
