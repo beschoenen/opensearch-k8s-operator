@@ -1,7 +1,6 @@
 package v1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -40,7 +39,7 @@ type OpenSearchISMPolicy struct {
 
 // ISMPolicySpec is the specification for the ISM policy for OS.
 type OpenSearchISMPolicySpec struct {
-	OpensearchRef corev1.LocalObjectReference `json:"opensearchCluster,omitempty"`
+	OpensearchRef OpensearchClusterRef `json:"opensearchCluster,omitempty"`
 	// The default starting state for each index that uses this policy.
 	DefaultState string `json:"defaultState"`
 	// A human-readable description of the policy.
@@ -274,7 +273,7 @@ type OpenSearchISMPolicyList struct {
 }
 
 // GetOpensearchRef returns the OpenSearch cluster reference
-func (p *OpenSearchISMPolicy) GetOpensearchRef() corev1.LocalObjectReference {
+func (p *OpenSearchISMPolicy) GetOpensearchRef() OpensearchClusterRef {
 	return p.Spec.OpensearchRef
 }
 

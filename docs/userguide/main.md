@@ -2385,6 +2385,27 @@ You can customize the generated Prometheus `ServiceMonitor` endpoint with relabe
 - `relabelings` are applied **before scraping** and allow modifying target labels.
 - `metricRelabelings` are applied **after scraping** and allow filtering or transforming metrics.
 
+## Referencing OpensearchCluster in another namespace
+
+The operator allows referencing a cluster in a different namespace on all resources.
+
+**Note:** This only works when the operator is deployed with cluster-scoped or multi-namespace watch mode and has RBAC permissions covering the referenced namespace. If the operator runs in single-namespace watch mode, validation and reconciliation will fail because the operator cannot read `OpenSearchCluster` objects in other namespaces.
+
+Define the `spec.opensearchCluster.namespace` property on any resource referencing an Opensearch cluster.
+When not defined, the default value will be the namespace of the resource.
+
+```yaml
+apiVersion: opensearch.org/v1
+kind: OpensearchTenant
+metadata:
+  name: sample-tenant
+  namespace: default
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+    namespace: another-namespace
+```
+
 ## Managing ISM policies with Kubernetes resources
 
 > **Deprecated:** `OpenSearchISMPolicy` is deprecated and will be removed in v4. See [Migrating away from the deprecated auxiliary CRDs](deprecated-crds-migration.md).

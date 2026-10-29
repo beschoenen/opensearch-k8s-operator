@@ -47,7 +47,7 @@ var _ = Describe("actiongroup reconciler", func() {
 				UID:       "testuid",
 			},
 			Spec: opensearchv1.OpensearchActionGroupSpec{
-				OpensearchRef: corev1.LocalObjectReference{
+				OpensearchRef: opensearchv1.OpensearchClusterRef{
 					Name: "test-cluster",
 				},
 				AllowedActions: []string{
@@ -129,6 +129,33 @@ var _ = Describe("actiongroup reconciler", func() {
 			}
 			Expect(len(events)).To(Equal(1))
 			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster to exist", opensearchPending)))
+		})
+	})
+
+	When("cluster is in another namespace", func() {
+		BeforeEach(func() {
+			instance.Spec.OpensearchRef.Namespace = "cluster-namespace"
+			mockClient.EXPECT().GetOpenSearchCluster(instance.Spec.OpensearchRef.Name, "cluster-namespace").Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
+			recorder = record.NewFakeRecorder(1)
+		})
+		It("should look up the cluster in the referenced namespace", func() {
+			go func() {
+				defer GinkgoRecover()
+				defer close(recorder.Events)
+				result, err := reconciler.Reconcile()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.Requeue).To(BeTrue())
+			}()
+			var events []string
+			for msg := range recorder.Events {
+				events = append(events, msg)
+			}
+			Expect(len(events)).To(Equal(1))
+			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster to exist", opensearchPending)))
+		})
+		It("should look up the cluster in the referenced namespace on delete", func() {
+			instance.Status.ExistingActionGroup = ptr.To(false)
+			Expect(reconciler.Delete()).To(Succeed())
 		})
 	})
 

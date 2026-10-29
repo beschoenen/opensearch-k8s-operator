@@ -22,6 +22,7 @@ import (
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -89,21 +90,23 @@ func (v *OpenSearchUserValidator) ValidateDelete(ctx context.Context, obj runtim
 
 // validateClusterReference validates that the referenced OpenSearch cluster exists
 func (v *OpenSearchUserValidator) validateClusterReference(ctx context.Context, user *opensearchv1.OpensearchUser) error {
+	namespace := util.DetermineClusterNamespace(user.Spec.OpensearchRef, user.Namespace)
+
 	// Try new API group first
 	cluster := &opensearchv1.OpenSearchCluster{}
 	err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      user.Spec.OpensearchRef.Name,
-		Namespace: user.Namespace,
+		Namespace: namespace,
 	}, cluster)
 
 	if err != nil {
 		// Fall back to old API group for backward compatibility
 		oldCluster := &opsterv1.OpenSearchCluster{}
-		if err := v.Client.Get(ctx, types.NamespacedName{
+		if legacyErr := v.Client.Get(ctx, types.NamespacedName{
 			Name:      user.Spec.OpensearchRef.Name,
-			Namespace: user.Namespace,
-		}, oldCluster); err != nil {
-			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", user.Spec.OpensearchRef.Name, err)
+			Namespace: namespace,
+		}, oldCluster); legacyErr != nil {
+			return clusterReferenceError(user.Spec.OpensearchRef.Name, namespace, err, legacyErr)
 		}
 	}
 
@@ -112,7 +115,7 @@ func (v *OpenSearchUserValidator) validateClusterReference(ctx context.Context, 
 
 // validateClusterReferenceUnchanged validates that the cluster reference hasn't changed
 func (v *OpenSearchUserValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpensearchUser) error {
-	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
+	if !util.OpensearchClusterRefUnchanged(old.Spec.OpensearchRef, new.Spec.OpensearchRef, new.Namespace) {
 		return fmt.Errorf("cannot change the cluster a user refers to")
 	}
 	return nil

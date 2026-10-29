@@ -5,14 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 )
 
 // Regression: plain bool + omitempty omitted explicit false and broke GitOps sync (issue #1172).
 func TestOpensearchSnapshotPolicySpec_JSONRetainsExplicitFalseBooleans(t *testing.T) {
 	spec := OpensearchSnapshotPolicySpec{
-		OpensearchRef: corev1.LocalObjectReference{Name: "cluster"},
+		OpensearchRef: OpensearchClusterRef{Name: "cluster"},
 		PolicyName:    "policy",
 		SnapshotConfig: SnapshotConfig{
 			Repository:         "repo",
@@ -43,7 +42,7 @@ func TestOpensearchSnapshotPolicySpec_JSONRetainsExplicitFalseBooleans(t *testin
 
 func TestOpensearchSnapshotPolicySpec_JSONOmitsUnsetSnapshotBooleans(t *testing.T) {
 	spec := OpensearchSnapshotPolicySpec{
-		OpensearchRef: corev1.LocalObjectReference{Name: "cluster"},
+		OpensearchRef: OpensearchClusterRef{Name: "cluster"},
 		PolicyName:    "policy",
 		SnapshotConfig: SnapshotConfig{
 			Repository: "repo",

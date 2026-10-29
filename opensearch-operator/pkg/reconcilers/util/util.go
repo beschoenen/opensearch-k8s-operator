@@ -364,6 +364,21 @@ func FetchOpensearchCluster(
 	return &cluster, nil
 }
 
+func DetermineClusterNamespace(ref opensearchv1.OpensearchClusterRef, defaultNamespace string) string {
+	if ref.Namespace == "" {
+		return defaultNamespace
+	}
+
+	return ref.Namespace
+}
+
+// OpensearchClusterRefUnchanged reports whether both references resolve to the same cluster.
+// An empty namespace is resolved to resourceNamespace before comparing.
+func OpensearchClusterRefUnchanged(old, new opensearchv1.OpensearchClusterRef, resourceNamespace string) bool {
+	return old.Name == new.Name &&
+		DetermineClusterNamespace(old, resourceNamespace) == DetermineClusterNamespace(new, resourceNamespace)
+}
+
 // Generates a checksum of binary data using the SHA1 algorithm.
 func GetSha1Sum(data []byte) (string, error) {
 	hasher := sha1.New()

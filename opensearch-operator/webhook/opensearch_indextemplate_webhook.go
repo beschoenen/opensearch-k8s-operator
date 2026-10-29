@@ -23,6 +23,7 @@ import (
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -90,21 +91,23 @@ func (v *OpenSearchIndexTemplateValidator) ValidateDelete(ctx context.Context, o
 
 // validateClusterReference validates that the referenced OpenSearch cluster exists
 func (v *OpenSearchIndexTemplateValidator) validateClusterReference(ctx context.Context, indexTemplate *opensearchv1.OpensearchIndexTemplate) error {
+	namespace := util.DetermineClusterNamespace(indexTemplate.Spec.OpensearchRef, indexTemplate.Namespace)
+
 	// Try new API group first
 	cluster := &opensearchv1.OpenSearchCluster{}
 	err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      indexTemplate.Spec.OpensearchRef.Name,
-		Namespace: indexTemplate.Namespace,
+		Namespace: namespace,
 	}, cluster)
 
 	if err != nil {
 		// Fall back to old API group for backward compatibility
 		oldCluster := &opsterv1.OpenSearchCluster{}
-		if err := v.Client.Get(ctx, types.NamespacedName{
+		if legacyErr := v.Client.Get(ctx, types.NamespacedName{
 			Name:      indexTemplate.Spec.OpensearchRef.Name,
-			Namespace: indexTemplate.Namespace,
-		}, oldCluster); err != nil {
-			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", indexTemplate.Spec.OpensearchRef.Name, err)
+			Namespace: namespace,
+		}, oldCluster); legacyErr != nil {
+			return clusterReferenceError(indexTemplate.Spec.OpensearchRef.Name, namespace, err, legacyErr)
 		}
 	}
 
@@ -113,7 +116,7 @@ func (v *OpenSearchIndexTemplateValidator) validateClusterReference(ctx context.
 
 // validateClusterReferenceUnchanged validates that the cluster reference hasn't changed
 func (v *OpenSearchIndexTemplateValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpensearchIndexTemplate) error {
-	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
+	if !util.OpensearchClusterRefUnchanged(old.Spec.OpensearchRef, new.Spec.OpensearchRef, new.Namespace) {
 		return fmt.Errorf("cannot change the cluster an index template refers to")
 	}
 	return nil

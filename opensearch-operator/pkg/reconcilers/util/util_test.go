@@ -861,3 +861,40 @@ var _ = Describe("AllMastersJoinedCluster", func() {
 		}, expected)).To(BeTrue())
 	})
 })
+
+var _ = Describe("Cluster references", func() {
+	DescribeTable("DetermineClusterNamespace",
+		func(ref opensearchv1.OpensearchClusterRef, expected string) {
+			Expect(DetermineClusterNamespace(ref, "resource-ns")).To(Equal(expected))
+		},
+		Entry("defaults to the resource namespace", opensearchv1.OpensearchClusterRef{Name: "cluster"}, "resource-ns"),
+		Entry("uses the referenced namespace", opensearchv1.OpensearchClusterRef{Name: "cluster", Namespace: "cluster-ns"}, "cluster-ns"),
+	)
+
+	DescribeTable("OpensearchClusterRefUnchanged",
+		func(old, new opensearchv1.OpensearchClusterRef, expected bool) {
+			Expect(OpensearchClusterRefUnchanged(old, new, "resource-ns")).To(Equal(expected))
+		},
+		Entry("identical without namespace",
+			opensearchv1.OpensearchClusterRef{Name: "cluster"},
+			opensearchv1.OpensearchClusterRef{Name: "cluster"}, true),
+		Entry("identical with namespace",
+			opensearchv1.OpensearchClusterRef{Name: "cluster", Namespace: "cluster-ns"},
+			opensearchv1.OpensearchClusterRef{Name: "cluster", Namespace: "cluster-ns"}, true),
+		Entry("empty namespace set to the resource namespace",
+			opensearchv1.OpensearchClusterRef{Name: "cluster"},
+			opensearchv1.OpensearchClusterRef{Name: "cluster", Namespace: "resource-ns"}, true),
+		Entry("resource namespace cleared",
+			opensearchv1.OpensearchClusterRef{Name: "cluster", Namespace: "resource-ns"},
+			opensearchv1.OpensearchClusterRef{Name: "cluster"}, true),
+		Entry("name changed",
+			opensearchv1.OpensearchClusterRef{Name: "cluster"},
+			opensearchv1.OpensearchClusterRef{Name: "other-cluster"}, false),
+		Entry("namespace changed",
+			opensearchv1.OpensearchClusterRef{Name: "cluster", Namespace: "team-a"},
+			opensearchv1.OpensearchClusterRef{Name: "cluster", Namespace: "team-b"}, false),
+		Entry("empty namespace set to another namespace",
+			opensearchv1.OpensearchClusterRef{Name: "cluster"},
+			opensearchv1.OpensearchClusterRef{Name: "cluster", Namespace: "cluster-ns"}, false),
+	)
+})
